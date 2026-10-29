@@ -1,0 +1,14 @@
+# internal notes stay out of the published site
+README_RU.md
+.DS_Store
+# assets the pages do not use
+assets/video/demo-results.mp4
+assets/video/demo-setup.mp4
+assets/video/turntable.mp4
+assets/jobsearch/demo-setup.jpg
+assets/jobsearch/demo-results.jpg
+assets/market/screens-all.jpg
+assets/blender/room-iso-v1.jpg
+assets/gomini/gomini.png
+assets/gomini/gomini-sound.png
+assets/gomini/gomini-media-full.png

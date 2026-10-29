@@ -1,0 +1,71 @@
+:root {
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
+  --text-xs: 0.8125rem; --text-sm: 0.9375rem; --text-md: 1.0625rem; --text-lg: 1.25rem; --text-xl: 1.5625rem; --text-2xl: 1.953rem; --text-3xl: 2.441rem;
+  --text-display-s: clamp(2.125rem, 3.2vw + 0.75rem, 3.5rem); --text-display: clamp(2.5rem, 3.6vw + 1rem, 4.625rem);
+  --text-section: clamp(1.875rem, 2.4vw + 0.9rem, 3.25rem); --text-title: clamp(1.25rem, 0.7vw + 0.9rem, 1.625rem); --text-lead: clamp(1.125rem, 0.35vw + 1rem, 1.3125rem);
+  --text-figure: clamp(2.25rem, 2.6vw + 1rem, 3.5rem);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
+  --container: 1360px; --gutter: 56px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 160px; --section-gap-l: 200px;
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
+
+  /* The room at night: the scene's own world colour, its teal walls, its two lamps. */
+  --color-paper: oklch(19% 0.085 280);
+  --color-paper-2: oklch(23.5% 0.075 281);
+  --color-paper-3: oklch(29% 0.075 281);
+  --color-wall: oklch(31% 0.052 200);
+  --color-wall-2: oklch(37% 0.058 200);
+  --color-ink: oklch(94.5% 0.017 85);
+  --color-ink-2: oklch(86% 0.02 85);
+  --color-muted: oklch(74% 0.03 275);
+  --color-faint: oklch(60% 0.03 275);
+  --color-rule: oklch(94% 0.02 85 / 0.13);
+  --color-rule-strong: oklch(94% 0.02 85 / 0.26);
+  --color-accent: oklch(82% 0.135 72);
+  --color-accent-ink: oklch(21% 0.045 60);
+  --color-focus: oklch(86% 0.17 75);
+  --color-screen: oklch(80% 0.09 190);
+  --color-error: oklch(68% 0.17 25); --color-success: oklch(78% 0.14 150);
+  --color-shade: oklch(12% 0.06 280 / 0.78);
+  --color-veil: oklch(19% 0.085 280 / 0.5);
+  --color-stage-clear: oklch(19% 0.085 280 / 0);
+  --color-accent-hover: oklch(87% 0.13 76);
+  --color-device: oklch(12% 0.01 282);
+  --color-crop-shade: oklch(10% 0.02 282 / 0.62);
+
+  /* Job Search Desktop's own Marker system, used only inside its case. */
+  --js-paper: oklch(97.4% 0.006 140);
+  --js-surface: oklch(99.6% 0.004 140);
+  --js-sunk: oklch(94.6% 0.009 140);
+  --js-line: oklch(90.3% 0.011 150);
+  --js-ink: oklch(23.4% 0.012 230);
+  --js-ink-soft: oklch(46% 0.015 180);
+  --js-pine: oklch(41% 0.075 170);
+  --js-yes: oklch(91% 0.19 118);
+  --js-ask: oklch(87% 0.14 82);
+  --js-no: oklch(79% 0.1 10);
+
+  /* The marketplace concept: warm, high-contrast, built for large type. */
+  --mk-paper: oklch(97% 0.012 85);
+  --mk-ink: oklch(18% 0.02 60);
+  --mk-soft: oklch(42% 0.02 60);
+  --mk-tile: oklch(91% 0.03 80);
+  --mk-action: oklch(48% 0.13 150);
+  --mk-action-ink: oklch(99% 0.006 85);
+  --mk-help: oklch(56% 0.16 40);
+
+  /* Telegram's dark chat, for the channel and the circle. */
+  --tg-bg: oklch(22% 0.025 250);
+  --tg-bubble: oklch(28% 0.03 250);
+  --tg-link: oklch(76% 0.11 235);
+  --tg-meta: oklch(68% 0.025 250);
+  --tg-text: oklch(95% 0.008 250);
+  --tg-chip: oklch(15% 0.02 250 / 0.7);
+
+  --font-display: "Tektur", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Onest", ui-sans-serif, system-ui, sans-serif;
+  --font-outlier: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-card: 14px; --radius-control: 10px; --radius-inner: 8px; --radius-pill: 999px; --rule-hair: 1px; --shadow-card: none;
+  --tracking-display: -0.012em;
+}

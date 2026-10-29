@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title data-i18n="meta.title">Artem Kuznetsov, product builder</title>
+<meta name="description" data-i18n-content="meta.desc" content="Artem Kuznetsov builds apps, 3D scenes and video with AI agents doing the routine. Walk through his Blender room to see the work.">
+<meta name="theme-color" content="#141330">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Tektur:wght@600&family=Onest:wght@400;700&family=JetBrains+Mono:wght@400&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tektur:wght@600&family=Onest:wght@400;700&family=JetBrains+Mono:wght@400&display=swap"></noscript>
+<link rel="stylesheet" href="styles.css?v=3">
+<script>document.documentElement.classList.add('js')</script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body class="is-loading">
+<a class="skip" href="#main" data-i18n="nav.skip">Skip to content</a>
+
+<div class="stage" id="stage" aria-hidden="true">
+  <img class="stage-fallback" src="assets/blender/room-iso.jpg" width="1920" height="1080" alt="">
+  <canvas id="roomCanvas"></canvas>
+</div>
+<div class="hotspots" id="hotspots" role="group" aria-label="Objects in the room" data-i18n-aria="hs.label"></div>
+
+<div class="boot" id="boot" aria-hidden="true">
+  <p class="boot-line"><span data-i18n="boot.line">Building the room</span> <span class="boot-count num" id="bootCount">0</span><span class="boot-of"> / 304</span></p>
+  <span class="boot-bar"><span id="bootBar"></span></span>
+</div>
+
+<header class="nav" id="nav">
+  <a class="wordmark" href="#top" aria-label="Artem Kuznetsov, back to top" data-i18n-aria="nav.home">artem<span class="wordmark-cursor">_</span></a>
+  <nav class="nav-links" aria-label="Sections" data-i18n-aria="nav.label">
+    <a href="#jobsearch" data-i18n="nav.work">Work</a>
+    <a href="#room" data-i18n="nav.room">The room</a>
+    <a href="#agents" data-i18n="nav.agents">How I work</a>
+    <a href="#roots" data-i18n="nav.about">About</a>
+  </nav>
+  <div class="nav-end">
+    <div class="lang" role="group" aria-label="Language" data-i18n-aria="nav.lang">
+      <button type="button" class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" class="lang-btn" data-lang="ru" aria-pressed="false">RU</button>
+    </div>
+    <a class="btn btn-quiet nav-cta" href="https://t.me/g1ug1ug1" target="_blank" rel="noopener" data-i18n="nav.cta">Write on Telegram</a>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- HERO: the room, assembled -->
+<section class="hero" id="top" data-shot="hero">
+  <div class="container hero-grid">
+    <div class="hero-copy">
+      <p class="hero-name" data-i18n="hero.name">Artem Kuznetsov</p>
+      <h1 class="hero-title" data-i18n="hero.title">I turn ideas into working things.</h1>
+      <p class="hero-lead" data-i18n="hero.lead">Apps, 3D and video, built fast with AI agents doing the routine.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#jobsearch" data-i18n="hero.cta">Walk through the room</a>
+        <a class="btn btn-ghost" href="#contact" data-i18n="hero.cta2">Contact</a>
+      </div>
+    </div>
+    <p class="hero-hint" data-i18n="hero.hint">This is my own Blender scene, running live. The glowing objects open projects.</p>
+  </div>
+</section>
+
+<!-- JOB SEARCH DESKTOP: the monitor -->
+<section class="chapter chapter-left" id="jobsearch" data-shot="monitor" aria-labelledby="js-title">
+  <div class="container">
+    <div class="panel">
+      <h2 id="js-title" class="section-title" data-i18n="js.title">A job search that proves every verdict.</h2>
+      <p class="lead" data-i18n="js.lead">A free desktop app for macOS and Windows. You set your conditions once. It reads open job boards, drops duplicates and marks every posting with a quote from its own text.</p>
+      <p class="panel-where" data-i18n="js.tag">On the monitor: Job Search Desktop</p>
+      <div class="panel-actions">
+        <a class="btn btn-primary" href="https://gomin1i.github.io/job-search-desktop/" target="_blank" rel="noopener" data-i18n="js.site">Download and watch the film</a>
+        <a class="link" href="https://github.com/GOMIN1I/job-search-desktop" target="_blank" rel="noopener" data-i18n="js.code">Source on GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="case case-js" aria-label="Job Search Desktop in detail" data-i18n-aria="js.detail" data-shot="monitor">
+  <div class="container">
+    <div class="js-try">
+      <div class="js-try-copy">
+        <h3 class="case-title" data-i18n="js.try.title">Three markers instead of guesses.</h3>
+        <p data-i18n="js.try.text">The whole interface is a printout and three highlighters: fits, clarify, does not fit. Change the conditions on the right and watch the verdict move.</p>
+        <fieldset class="js-controls">
+          <legend data-i18n="js.try.legend">Your conditions</legend>
+          <label class="js-row">
+            <span data-i18n="js.try.pay">Minimum pay</span>
+            <select id="jsPay" name="pay">
+              <option value="600">600 USD</option>
+              <option value="1000">1,000 USD</option>
+            </select>
+          </label>
+          <label class="js-row">
+            <span data-i18n="js.try.eng">My English</span>
+            <select id="jsEng" name="english">
+              <option value="B1">B1</option>
+              <option value="B2">B2</option>
+            </select>
+          </label>
+          <label class="js-row js-check">
+            <input type="checkbox" id="jsCalls" name="nocalls">
+            <span data-i18n="js.try.calls">No phone calls</span>
+          </label>
+        </fieldset>
+      </div>
+      <article class="js-card" aria-live="polite">
+        <header class="js-card-head">
+          <h4 data-i18n="js.card.role">Junior Data Annotator</h4>
+          <p class="js-card-co" data-i18n="js.card.co">Northwind Labs (demo), remote</p>
+          <p class="js-verdict" id="jsVerdict" data-v="ask"><span class="js-mark-icon" aria-hidden="true">?</span> <span id="jsVerdictText">Clarify</span></p>
+        </header>
+        <ul class="js-lines">
+          <li data-cond="remote"><span class="js-cond" data-i18n="js.card.c1">Work format</span><q class="js-quote" data-i18n="js.card.q1">Fully remote, team across the CIS.</q><span class="js-tag" data-v="yes"></span></li>
+          <li data-cond="calls"><span class="js-cond" data-i18n="js.card.c2">Phone work</span><q class="js-quote" data-i18n="js.card.q2">Chat and email, plus a weekly team call.</q><span class="js-tag" data-v="yes"></span></li>
+          <li data-cond="pay"><span class="js-cond" data-i18n="js.card.c3">Pay</span><q class="js-quote" data-i18n="js.card.q3">From 800 USD per month.</q><span class="js-tag" data-v="yes"></span></li>
+          <li data-cond="eng"><span class="js-cond" data-i18n="js.card.c4">Language</span><q class="js-quote" data-i18n="js.card.q4">English B2 preferred.</q><span class="js-tag" data-v="ask"></span></li>
+        </ul>
+        <p class="js-card-foot" data-i18n="js.card.foot">Demo data, fictional company. The app marks a missing fact “clarify” instead of guessing it.</p>
+      </article>
+    </div>
+
+    <dl class="figures">
+      <div><dt data-i18n="js.f1.t">job sources read</dt><dd class="num">10</dd><dd class="fig-d" data-i18n="js.f1.d">Seven open feeds plus Greenhouse, Lever and Ashby boards</dd></div>
+      <div><dt data-i18n="js.f2.t">rule tests</dt><dd class="num">46</dd><dd class="fig-d" data-i18n="js.f2.d">Pay, country, language, calls and hours, each with a test</dd></div>
+      <div><dt data-i18n="js.f3.t">to the first screen</dt><dd class="num">476<small> ms</small></dd><dd class="fig-d" data-i18n="js.f3.d">Measured on the packaged macOS build</dd></div>
+      <div><dt data-i18n="js.f4.t">correct on local AI</dt><dd class="num">5/5</dd><dd class="fig-d" data-i18n="js.f4.d">Gemma 4 E4B on real postings, nothing leaves the computer</dd></div>
+    </dl>
+
+    <div class="shots">
+      <div class="shots-tabs" role="tablist" aria-label="Screens" data-i18n-aria="js.screens">
+        <button type="button" role="tab" aria-selected="true" aria-controls="shotView" data-shot-img="10-today-demo" data-i18n="js.s1">Today</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="shotView" data-shot-img="11-vacancy-detail" data-i18n="js.s2">Job card</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="shotView" data-shot-img="13-applications-board" data-i18n="js.s3">Applications</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="shotView" data-shot-img="05b-onboarding-assistant-in-use" data-i18n="js.s4">Local AI setup</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="shotView" data-shot-img="14-profile" data-i18n="js.s5">Profile and skills</button>
+      </div>
+      <figure class="shots-view" id="shotView" role="tabpanel">
+        <img id="shotImg" src="assets/jobsearch/en-10-today-demo.jpg" width="1600" height="985" alt="The Today screen of Job Search Desktop with demo data" data-i18n-alt="js.alt">
+        <figcaption data-i18n="js.shotcap">Screenshots come straight from the real app window, filled with synthetic data.</figcaption>
+      </figure>
+    </div>
+
+    <div class="js-film">
+      <figure class="film">
+        <video id="jsFilm" controls preload="none" playsinline poster="assets/jobsearch/poster-en.jpg" data-src-en="assets/video/jobsearch-film-en.mp4" data-src-ru="assets/video/jobsearch-film-ru.mp4" data-poster-en="assets/jobsearch/poster-en.jpg" data-poster-ru="assets/jobsearch/poster.jpg" width="1280" height="720">
+          <source src="assets/video/jobsearch-film-en.mp4" type="video/mp4">
+        </video>
+        <figcaption data-i18n="js.filmcap">The 58-second launch film. Built in code with Remotion, music synthesised in Python, mastered in ffmpeg.</figcaption>
+      </figure>
+      <div class="js-agents">
+        <h3 class="case-title" data-i18n="js.ag.title">One builder, two platforms, two languages.</h3>
+        <p data-i18n="js.ag.text">AI coding agents wrote most of the routine code against a strict spec. My part was the spec, the design system, the decisions and the checks: every rule has a test, and every screenshot is taken from the real window.</p>
+        <ul class="ticks">
+          <li data-i18n="js.ag.l1">Electron, React, TypeScript and SQLite</li>
+          <li data-i18n="js.ag.l2">The Marker design system, with its Figma library</li>
+          <li data-i18n="js.ag.l3">Russian and English, from the first screen to the installer</li>
+          <li data-i18n="js.ag.l4">24 of 24 end-to-end checks in each language</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MARKETPLACE: the phone on the desk -->
+<section class="chapter chapter-right" id="market" data-shot="phone" aria-labelledby="mk-title">
+  <div class="container">
+    <div class="panel">
+      <h2 id="mk-title" class="section-title" data-i18n="mk.title">Online shopping for people over sixty.</h2>
+      <p class="lead" data-i18n="mk.lead">I took part in a hackathon and came up with this idea there: a marketplace that older people can use on their own, without calling anyone for help.</p>
+      <p class="panel-where" data-i18n="mk.tag">On the desk: a hackathon idea</p>
+    </div>
+  </div>
+</section>
+
+<section class="case case-mk" aria-label="Ryadom concept screens" data-i18n-aria="mk.detail" data-shot="phone">
+  <div class="container">
+    <div class="mk-head">
+      <img class="mk-icon" src="assets/market/icon.png" width="196" height="196" alt="Ryadom app icon" data-i18n-alt="mk.iconAlt">
+      <div class="mk-copy">
+        <h3 class="case-title" data-i18n="mk.c.title">Ryadom: shopping that keeps family close.</h3>
+        <p data-i18n="mk.c.text">The name means “nearby”. The concept answers the three reasons older people give up on marketplaces: small buttons, fear of a mistake, and nobody around to help.</p>
+      </div>
+    </div>
+    <ol class="rules">
+      <li><strong data-i18n="mk.r1.t">Voice first.</strong> <span data-i18n="mk.r1.d">Search starts with a microphone, categories are pictures, prices are the biggest text on screen.</span></li>
+      <li><strong data-i18n="mk.r2.t">Practice without risk.</strong> <span data-i18n="mk.r2.d">A training purchase walks through the whole order with no real payment or delivery.</span></li>
+      <li><strong data-i18n="mk.r3.t">Family one tap away.</strong> <span data-i18n="mk.r3.d">Share a basket with a relative, open theirs, and learn to spot a dangerous request.</span></li>
+    </ol>
+    <div class="mk-screens">
+      <figure><img src="assets/market/screen-1.png" width="390" height="844" alt="Home screen with voice search and picture categories" data-i18n-alt="mk.a1" loading="lazy"><figcaption data-i18n="mk.s1">Home: voice search and picture categories</figcaption></figure>
+      <figure><img src="assets/market/screen-2.png" width="390" height="844" alt="Product card with a large price and one main button" data-i18n-alt="mk.a2" loading="lazy"><figcaption data-i18n="mk.s2">Product: one price, one big button</figcaption></figure>
+      <figure><img src="assets/market/screen-3.png" width="390" height="844" alt="Basket in training mode with sharing to a relative" data-i18n-alt="mk.a3" loading="lazy"><figcaption data-i18n="mk.s3">Basket: a training purchase and sharing with family</figcaption></figure>
+      <figure><img src="assets/market/screen-4.png" width="390" height="844" alt="Seven short lessons, from voice search to returns" data-i18n-alt="mk.a4" loading="lazy"><figcaption data-i18n="mk.s4">Help: seven short lessons, two or three minutes each</figcaption></figure>
+    </div>
+    <p class="mk-note" data-i18n="mk.note">Concept screens from the hackathon. Screen text is in Russian, the language of the people it was made for.</p>
+  </div>
+</section>
+
+<!-- GOMINI SOUND: the speakers -->
+<section class="chapter chapter-left" id="gomini" data-shot="sound" aria-labelledby="gm-title">
+  <div class="container">
+    <div class="panel">
+      <img class="gomini-mark" src="assets/gomini/gomini-sound-dark.png" width="880" height="430" alt="GOMINI SOUND logo: Where creativity connects the world" data-i18n-alt="gm.logo">
+      <h2 id="gm-title" class="section-title" data-i18n="gm.title">One of the creatives behind GOMINI.</h2>
+      <p class="lead" data-i18n="gm.lead">GOMINI is a creative brand that is still being built. I work in its team: I ran the music channel GOMINI SOUND and cut the Helicopter edit for it.</p>
+    </div>
+  </div>
+</section>
+
+<section class="case case-gm" aria-label="GOMINI SOUND in detail" data-i18n-aria="gm.detail" data-shot="sound">
+  <div class="container">
+    <div class="circle-wrap">
+      <div class="circle-player">
+        <button type="button" class="circle" id="circleBtn" aria-pressed="false">
+          <span class="visually-hidden" data-i18n="gm.name">Helicopter edit with sound.</span>
+          <video id="circleVid" muted loop playsinline preload="metadata" poster="assets/video/helicopter-poster.jpg" width="560" height="560">
+            <source src="assets/video/helicopter-circle.mp4" type="video/mp4">
+          </video>
+          <svg class="circle-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48.5" pathLength="100" id="circleRing"/></svg>
+          <span class="circle-time num" id="circleTime" aria-hidden="true">0:30</span>
+          <span class="circle-sound" id="circleSound" data-i18n="gm.sound">Tap for sound</span>
+        </button>
+        <p class="circle-cap" data-i18n="gm.cap">Helicopter, A$AP Rocky. An edit for GOMINI SOUND, posted as a Telegram video message.</p>
+      </div>
+      <div class="circle-copy">
+        <h3 class="case-title" data-i18n="gm.c.title">In the chat it is a circle. Inside it is a music video.</h3>
+        <p data-i18n="gm.c.text">Telegram shows it like any round video someone recorded on their phone. You tap it expecting a selfie and get a full edit, cut to the music.</p>
+        <ul class="ticks">
+          <li data-i18n="gm.c.l1">More than 25 cuts in 30 seconds, cut to the track</li>
+          <li data-i18n="gm.c.l2">A GOMINI SOUND intro and a title card before the drop</li>
+          <li data-i18n="gm.c.l3">Fisheye framing keeps the action in the centre, where the round crop keeps it</li>
+          <li data-i18n="gm.c.l4">Mastered in 4K in DaVinci Resolve, delivered at 640 by 640, the size Telegram accepts as a circle</li>
+        </ul>
+        <figure class="crop">
+          <div class="crop-frame">
+            <img src="assets/video/helicopter-master-frame.jpg" width="1280" height="720" alt="A frame of the 4K master with the circle Telegram keeps marked on it" data-i18n-alt="gm.crop.alt" loading="lazy">
+            <span class="crop-circle" aria-hidden="true"></span>
+          </div>
+          <figcaption data-i18n="gm.crop.cap">The 4K master. The ring is all Telegram keeps, so the whole edit was framed for it.</figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="channel">
+      <div class="channel-head">
+        <h3 class="case-title" data-i18n="gm.ch.title">GOMINI SOUND, the channel I ran.</h3>
+        <p data-i18n="gm.ch.text">Music as a language: thoughts on culture, album breakdowns and the team’s own experiments. Three posts from it.</p>
+      </div>
+      <div class="posts">
+        <article class="post">
+          <header class="post-head"><img src="assets/gomini/avatar.png" width="64" height="64" alt="GOMINI SOUND"><time datetime="2025-09-20" data-i18n="gm.p1.d">20 September 2025</time></header>
+          <h4 class="post-title" data-i18n="gm.p1.t">What is GOMINI SOUND?</h4>
+          <p data-i18n="gm.p1.b">The point of the project is to show that music is not background. It is a language of the soul, a tool for understanding yourself and the people around you.</p>
+          <p class="post-note" data-i18n="gm.p1.n">Planned: thoughts on music and culture, breakdowns of tracks and albums, stories that inspire, and the author’s own experiments.</p>
+          <footer class="post-meta"><span class="num" data-i18n="gm.p1.v">393 views</span></footer>
+        </article>
+        <article class="post">
+          <header class="post-head"><img src="assets/gomini/avatar.png" width="64" height="64" alt="GOMINI SOUND"><time datetime="2026-01-16" data-i18n="gm.p2.d">16 January 2026</time></header>
+          <h4 class="post-title" data-i18n="gm.p2.t">What we have before Don’t Be Dumb</h4>
+          <ul>
+            <li data-i18n="gm.p2.l1">Almost eight years of waiting</li>
+            <li data-i18n="gm.p2.l2">A Spotify pre-save record, over a million</li>
+            <li data-i18n="gm.p2.l3">Rocky calling it his best release on the GQ podcast</li>
+            <li data-i18n="gm.p2.l4">17 tracks and a lot of genres</li>
+          </ul>
+          <footer class="post-meta"><span class="num" data-i18n="gm.p2.v">251 views</span></footer>
+        </article>
+        <article class="post">
+          <header class="post-head"><img src="assets/gomini/avatar.png" width="64" height="64" alt="GOMINI SOUND"><time datetime="2026-01-16" data-i18n="gm.p3.d">16 January 2026</time></header>
+          <h4 class="post-title">DON’T BE DUMB</h4>
+          <p data-i18n="gm.p3.b">Posted on release day.</p>
+          <footer class="post-meta"><span class="num" data-i18n="gm.p3.v">258 views</span></footer>
+        </article>
+      </div>
+      <p class="channel-foot" data-i18n="gm.ch.foot">Posts are translated from Russian. The channel had 24 subscribers: a small room, written for like a big one.</p>
+    </div>
+  </div>
+</section>
+
+<!-- THE ROOM: the drafting board -->
+<section class="chapter chapter-left" id="room" data-shot="board" aria-labelledby="rm-title">
+  <div class="container">
+    <div class="panel panel-wide">
+      <h2 id="rm-title" class="section-title" data-i18n="rm.title">The room you are in is a project too.</h2>
+      <p class="lead" data-i18n="rm.lead">A night workroom built in Blender with an AI agent through the Python API: 304 named objects, six lights, rendered in Cycles. Here it runs live in your browser.</p>
+      <p class="panel-where" data-i18n="rm.tag">On the drafting board: this room</p>
+      <h3 class="panel-sub" data-i18n="rm.c.title">Drawing and code on one wall.</h3>
+      <p data-i18n="rm.c.text">The composition is one sentence: an engineer who builds software. Pick a part and the camera goes to it.</p>
+      <div class="rm-parts" role="group" aria-label="Parts of the room" data-i18n-aria="rm.parts">
+        <button type="button" class="part" data-focus="board" aria-pressed="false"><strong data-i18n="rm.p1.t">Drafting board</strong><span data-i18n="rm.p1.d">The engineer’s half: a drawing, a ruler, a set square.</span></button>
+        <button type="button" class="part" data-focus="monitor" aria-pressed="false"><strong data-i18n="rm.p2.t">Monitor with code</strong><span data-i18n="rm.p2.d">The builder’s half, right next to it. The drawing turns into software.</span></button>
+        <button type="button" class="part" data-focus="pylon" aria-pressed="false"><strong data-i18n="rm.p3.t">Pylon on the shelf</strong><span data-i18n="rm.p3.d">A tiny power line tower with glass insulators: my degree, kept in view.</span></button>
+        <button type="button" class="part" data-focus="window" aria-pressed="false"><strong data-i18n="rm.p4.t">Window on the city</strong><span data-i18n="rm.p4.d">Cold light from outside against two warm lamps inside: late, focused work.</span></button>
+        <button type="button" class="part" data-focus="sound" aria-pressed="false"><strong data-i18n="rm.p5.t">Speakers and headphones</strong><span data-i18n="rm.p5.d">Sound for long nights, and the corner where GOMINI SOUND lives.</span></button>
+        <button type="button" class="part" data-focus="plane" aria-pressed="false"><strong data-i18n="rm.p6.t">Plane on a stand</strong><span data-i18n="rm.p6.d">The highest point of the room: something built to move.</span></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="case case-rm" aria-label="How the room was rendered" data-i18n-aria="rm.detail" data-shot="board">
+  <div class="container">
+    <div class="rm-media">
+      <figure class="rm-fig rm-fig-wide">
+        <img src="assets/blender/room-iso.jpg" width="1920" height="1080" alt="Isometric Cycles render of the night workroom" data-i18n-alt="rm.alt1" loading="lazy">
+        <figcaption data-i18n="rm.cap1">The Cycles render the live scene is built from.</figcaption>
+      </figure>
+      <figure class="rm-fig">
+        <video src="assets/video/night-room.mp4" muted loop playsinline preload="none" poster="assets/blender/room-night.jpg" width="1920" height="1080" data-autoplay></video>
+        <figcaption data-i18n="rm.cap2">A 240-frame night loop: the code scrolls, the city blinks, the camera holds still.</figcaption>
+      </figure>
+      <figure class="rm-fig">
+        <img src="assets/blender/room-desk.jpg" width="1920" height="1080" alt="Close-up of the desk, monitor with code and the window" data-i18n-alt="rm.alt3" loading="lazy">
+        <figcaption data-i18n="rm.cap3">Desk camera, one of three cameras in the scene.</figcaption>
+      </figure>
+    </div>
+    <dl class="figures figures-3">
+      <div><dt data-i18n="rm.f1">named objects</dt><dd class="num">304</dd></div>
+      <div><dt data-i18n="rm.f2">lights in the scene</dt><dd class="num">6</dd></div>
+      <div><dt data-i18n="rm.f3">frames in the night loop</dt><dd class="num">240</dd></div>
+    </dl>
+  </div>
+</section>
+
+<!-- AGENTS: the computer under the desk -->
+<section class="chapter chapter-right" id="agents" data-shot="pc" aria-labelledby="ag-title">
+  <div class="container">
+    <div class="panel panel-wide">
+      <h2 id="ag-title" class="section-title" data-i18n="ag.title">Agents do the routine. I make the calls.</h2>
+      <p class="lead" data-i18n="ag.lead">I am betting on AI agents and use them every day. For a team that means prototypes in days and routine that stops eating its evenings.</p>
+      <p class="panel-where" data-i18n="ag.tag">Under the desk: the machine that runs the agents</p>
+      <ol class="steps">
+        <li><h3 data-i18n="ag.s1.t">Write the brief like a spec</h3><p data-i18n="ag.s1.d">What it must do, what counts as done, what must never happen.</p></li>
+        <li><h3 data-i18n="ag.s2.t">Let agents draft</h3><p data-i18n="ag.s2.d">Code, Blender scripts, test data, first cuts of copy.</p></li>
+        <li><h3 data-i18n="ag.s3.t">Check everything</h3><p data-i18n="ag.s3.d">Tests, screenshots of the real window, frame-by-frame validation.</p></li>
+        <li><h3 data-i18n="ag.s4.t">Ship it whole</h3><p data-i18n="ag.s4.d">Installers, a README in two languages, a launch film.</p></li>
+      </ol>
+      <p class="proof" data-i18n="ag.proof">Agents I work with every day: Claude Code and Codex, for code, scripts, research and test data. The checks stay mine.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ROOTS: the pylon -->
+<section class="chapter chapter-right" id="roots" data-shot="pylon" aria-labelledby="rt-title">
+  <div class="container">
+    <div class="panel panel-wide">
+      <h2 id="rt-title" class="section-title" data-i18n="rt.title">Trained as a power engineer.</h2>
+      <p class="lead" data-i18n="rt.lead">Third year at Samara Polytech, electric power systems and networks. Engineering taught me to think in loads and failures: what breaks first and what has to hold.</p>
+      <p class="panel-where" data-i18n="rt.tag">On the shelf: where I come from</p>
+      <dl class="facts">
+        <div><dt data-i18n="rt.f1.t">Practice, summer 2026</dt><dd data-i18n="rt.f1.d">Elektroshchit plant, Samara. A presentation on three new switchgear series, recommended grade: excellent.</dd></div>
+        <div><dt data-i18n="rt.f2.t">Hackathon</dt><dd data-i18n="rt.f2.d">The marketplace for older people started there as my idea.</dd></div>
+        <div><dt data-i18n="rt.f3.t">English</dt><dd data-i18n="rt.f3.d">B1, confident in reading and written work.</dd></div>
+      </dl>
+      <h3 class="tools-title" data-i18n="rt.tools">What I build with, and where you saw it</h3>
+      <ul class="tools">
+        <li><span class="tool">Figma</span><span data-i18n="rt.t1">The Marker design system</span></li>
+        <li><span class="tool">Blender</span><span data-i18n="rt.t2">This room, EEVEE and Cycles</span></li>
+        <li><span class="tool">Claude Code, Codex</span><span data-i18n="rt.t3">Every project on this page</span></li>
+        <li><span class="tool">TypeScript, React, Electron</span><span data-i18n="rt.t4">Job Search Desktop</span></li>
+        <li><span class="tool">Python</span><span data-i18n="rt.t5">Blender scripts, data, music synthesis</span></li>
+        <li><span class="tool">DaVinci Resolve</span><span data-i18n="rt.t6">The Helicopter edit</span></li>
+        <li><span class="tool">Remotion</span><span data-i18n="rt.t7">A launch film written as code</span></li>
+        <li><span class="tool">AutoCAD, KOMPAS, Excel</span><span data-i18n="rt.t8">From engineering school</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT: the window -->
+<section class="chapter chapter-left chapter-end" id="contact" data-shot="window" aria-labelledby="ct-title">
+  <div class="container">
+    <div class="panel panel-wide">
+      <h2 id="ct-title" class="section-title" data-i18n="ct.title">Looking for a team that makes things.</h2>
+      <p class="lead" data-i18n="ct.lead">Creative, product and AI teams. Give me the idea on a whiteboard and I will bring back something you can open. Remote or hybrid, from Samara.</p>
+      <p class="panel-where" data-i18n="ct.tag">Out of the window: the city</p>
+      <dl class="gets">
+        <div><dt data-i18n="ct.g1.t">A working prototype, not a deck</dt><dd data-i18n="ct.g1.d">Ideas come back as something you can open and test.</dd></div>
+        <div><dt data-i18n="ct.g2.t">Routine off the team’s plate</dt><dd data-i18n="ct.g2.d">Agents take the repetitive work, I check every result.</dd></div>
+        <div><dt data-i18n="ct.g3.t">Design and engineering in one head</dt><dd data-i18n="ct.g3.d">Figma, Blender and code, without a hand-off in between.</dd></div>
+      </dl>
+      <dl class="contacts">
+        <div><dt data-i18n="ct.mail">Email</dt><dd><a class="link" href="mailto:arhisamara953@gmail.com">arhisamara953@gmail.com</a></dd></div>
+        <div><dt>Telegram</dt><dd><a class="link" href="https://t.me/g1ug1ug1" target="_blank" rel="noopener">@g1ug1ug1</a></dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="container foot-row">
+    <p class="foot-mark">artem<span class="wordmark-cursor">_</span></p>
+    <p data-i18n="ft.line">Artem Kuznetsov, Samara, 2026. The room on this page is my own Blender scene.</p>
+    <button type="button" class="link" id="replay" data-i18n="ft.replay">Build the room again</button>
+  </div>
+</footer>
+
+<script src="i18n.js?v=3"></script>
+<script src="main.js?v=3"></script>
+<script type="module" src="scene.js?v=5"></script>
+</body>
+</html>
