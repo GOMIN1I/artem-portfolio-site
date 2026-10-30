@@ -231,7 +231,7 @@ window.I18N_RU = {
   'ct.tgv': 'Username будет добавлен',
 
   'ft.line': 'Артём Кузнецов, Самара, 2026. Комната на этой странице — моя собственная Blender-сцена.',
-  'ft.replay': 'Собрать комнату заново',
+  'ft.replay': 'Опустить иглу заново',
 
   'hs.label': 'Предметы в комнате',
   'hs.monitor': 'Job Search Desktop',
@@ -240,10 +240,31 @@ window.I18N_RU = {
   'hs.board': 'Эта комната в Blender',
   'hs.pc': 'Как я работаю с агентами',
   'hs.pylon': 'Откуда я',
-  'hs.window': 'Связаться'
+  'hs.window': 'Связаться',
+  'hs.deck': 'Проигрыватель',
+  'gate.kicker': 'Сторона C, первый трек',
+  'gate.title': 'Поставь пластинку.',
+  'gate.sound': 'Опустить иглу',
+  'gate.quiet': 'Войти без звука',
+  'gate.note': 'Swimming Pools (Drank), Kendrick Lamar, играет на всём сайте. Поставить на паузу или убавить звук можно в любой момент.',
+  'film.skip': 'Пропустить интро',
+  'film.r1': 'АРТЁМ КУЗНЕЦОВ  /  ',
+  'film.r2': 'ПРИЛОЖЕНИЯ  /  3D  /  ВИДЕО  /  ',
+  'film.r3': 'ПРЕВРАЩАЮ ИДЕИ В РАБОТАЮЩИЕ ВЕЩИ  /  ',
+  'dock.label': 'Музыкальный плеер',
+  'dock.look': 'Показать проигрыватель',
+  'dock.play': 'Воспроизвести',
+  'dock.pause': 'Пауза',
+  'dock.mute': 'Выключить звук',
+  'dock.unmute': 'Включить звук',
+  'dock.volume': 'Громкость',
+  'listen.hint': 'Клик по пластинке ставит на паузу. Ручка усилителя меняет громкость.',
+  'listen.close': 'Назад в комнату'
 };
 window.I18N_EN_EXTRA = {
   'js.v.yes': 'Fits', 'js.v.ask': 'Clarify', 'js.v.no': 'Does not fit',
   'hs.monitor': 'Job Search Desktop', 'hs.phone': 'Marketplace for older people', 'hs.sound': 'GOMINI SOUND',
-  'hs.board': 'This room, in Blender', 'hs.pc': 'How I work with agents', 'hs.pylon': 'Where I come from', 'hs.window': 'Get in touch'
+  'hs.board': 'This room, in Blender', 'hs.pc': 'How I work with agents', 'hs.pylon': 'Where I come from', 'hs.window': 'Get in touch', 'hs.deck': 'The turntable',
+  'film.r1': 'ARTEM KUZNETSOV  /  ', 'film.r2': 'APPS  /  3D  /  VIDEO  /  ', 'film.r3': 'TURNING IDEAS INTO WORKING THINGS  /  ',
+  'dock.play': 'Play', 'dock.pause': 'Pause', 'dock.mute': 'Mute', 'dock.unmute': 'Unmute'
 };

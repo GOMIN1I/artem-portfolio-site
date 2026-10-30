@@ -187,5 +187,5 @@
   const urlLang = new URL(location.href).searchParams.get('lang');
   setLang(urlLang || store.get('artem-lang') || 'en', true);
   APP.replay = () => {};
-  $('#replay').addEventListener('click', () => { scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' }); APP.replay(); });
+  $('#replay').addEventListener('click', () => { scrollTo({ top: 0, behavior: 'instant' }); APP.replay(); });
 })();

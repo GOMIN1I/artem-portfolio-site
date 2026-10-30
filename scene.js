@@ -5,6 +5,9 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import { buildDeck } from './deck.js?v=1';
+import { makeFilm, T } from './film.js?v=1';
 
 const APP = window.APP || { t: (k) => k, onLang: [], reduced: false };
 const reduced = APP.reduced;
@@ -18,6 +21,7 @@ const hotspotsEl = document.getElementById('hotspots');
 const B = (x, y, z) => new THREE.Vector3(x, z, -y);
 const lowTier = matchMedia('(pointer: coarse)').matches || innerWidth < 760 || (navigator.hardwareConcurrency || 8) <= 4;
 const narrow = () => innerWidth < 760;
+const BLOOM = 0.22;
 
 /* ---------------- renderer ---------------- */
 let renderer;
@@ -49,11 +53,16 @@ function start() {
 
   const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 80);
 
-  let composer = null, bloom = null;
+  let composer = null, bloom = null, bokeh = null;
   if (!lowTier) {
-    composer = new EffectComposer(renderer);
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // multisampled: the tonearm is a few pixels wide and the macro shots show every stair-step
+    composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
+    composer.setPixelRatio(renderer.getPixelRatio());
     composer.addPass(new RenderPass(scene, camera));
-    bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.22, 0.35, 0.93);
+    bokeh = new BokehPass(scene, camera, { focus: 1, aperture: 0, maxblur: 0.014 }); bokeh.enabled = false;
+    composer.addPass(bokeh);
+    bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), BLOOM, 0.35, 0.93);
     composer.addPass(bloom);
     composer.addPass(new OutputPass());
   }
@@ -62,6 +71,21 @@ function start() {
   const lights = [];
   const fade = { v: 1, mats: [] };
   const setFade = (v) => { fade.v = v; fade.mats.forEach(([m, base]) => m.color.setScalar(base * v)); };
+  // Shared by every baked surface: the light that spreads out from the record, and the ripple on the beat.
+  const fx = { origin: { value: new THREE.Vector3() }, dim: { value: 1 }, radius: { value: 1e3 }, edge: { value: 0 }, rip: { value: -1 }, ripA: { value: 0 } };
+  function patchFx(sh, detail) {
+    Object.assign(sh.uniforms, { fxO: fx.origin, fxDim: fx.dim, fxR: fx.radius, fxEdge: fx.edge, fxRip: fx.rip, fxRipA: fx.ripA });
+    sh.vertexShader = 'varying vec3 vFxW;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n vFxW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    let f = 'uniform vec3 fxO; uniform float fxDim, fxR, fxEdge, fxRip, fxRipA; varying vec3 vFxW;\n' + sh.fragmentShader;
+    if (detail) f = 'uniform float dStrength;\n' + f.replace('#include <map_fragment>', '#ifdef USE_MAP\n diffuseColor.rgb *= max(0.0, 1.0 + dStrength * (2.0 * texture2D(map, vMapUv).r - 1.0));\n#endif');
+    sh.fragmentShader = f.replace('#include <opaque_fragment>', `
+      float fxD = distance(vFxW, fxO);
+      vec3 fxLit = outgoingLight;
+      outgoingLight *= mix(fxDim, 1.0, 1.0 - smoothstep(fxR - 1.1, fxR, fxD));
+      outgoingLight += vec3(1.0, 0.62, 0.24) * fxEdge * (0.25 + fxLit) * smoothstep(fxR - 0.8, fxR - 0.1, fxD) * (1.0 - smoothstep(fxR - 0.1, fxR + 0.12, fxD));
+      outgoingLight += vec3(1.0, 0.66, 0.3) * fxRipA * fxLit * (1.0 - smoothstep(0.0, 0.2, abs(fxD - fxRip)));
+      #include <opaque_fragment>`);
+  }
 
   /* ---------- textures painted in code for the procedural materials ---------- */
   const tex = (w, h, draw, emissive) => {
@@ -69,7 +93,7 @@ function start() {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
   };
   const rnd = mulberry(7);
-  const T = {
+  const PAINTED = {
     city: tex(1024, 768, (g, w, h) => {
       g.fillStyle = '#0b0d26'; g.fillRect(0, 0, w, h);
       for (let i = 0; i < 26; i++) {
@@ -86,7 +110,8 @@ function start() {
   const aniso = renderer.capabilities.getMaxAnisotropy();
   const texLoader = new THREE.TextureLoader();
   // Everyone starts on the light versions (about 2.3 MB); desktops swap in 4K once the room has assembled.
-  const LM = texLoader.load('assets/room/lightmap-2k.jpg');
+  let lmDone; const lmReady = new Promise((res) => { lmDone = res; });
+  const LM = texLoader.load('assets/room/lightmap-2k.jpg', lmDone, undefined, lmDone);
   LM.colorSpace = THREE.SRGBColorSpace; LM.flipY = false; LM.anisotropy = aniso; LM.channel = 1;
   const manifest = fetch('assets/room/detail/manifest.json').then((r) => r.json()).catch(() => ({}));
   const detailTex = {};
@@ -115,14 +140,9 @@ function start() {
   function makeBaked(name) {
     const d = DETAIL[name];
     const m = new THREE.MeshBasicMaterial({ lightMap: LM, lightMapIntensity: Math.PI, toneMapped: false, map: d ? detailFor(d[0]) : null });
-    if (d) {
-      const strength = d[1];
-      m.onBeforeCompile = (sh) => {
-        sh.uniforms.dStrength = { value: strength };
-        sh.fragmentShader = 'uniform float dStrength;\n' + sh.fragmentShader.replace('#include <map_fragment>',
-          '#ifdef USE_MAP\n diffuseColor.rgb *= max(0.0, 1.0 + dStrength * (2.0 * texture2D(map, vMapUv).r - 1.0));\n#endif');
-      };
-    }
+    const strength = d ? d[1] : 0;
+    m.onBeforeCompile = (sh) => { if (d) sh.uniforms.dStrength = { value: strength }; patchFx(sh, !!d); };
+    m.customProgramCacheKey = () => (d ? 'baked-d' : 'baked');
     fade.mats.push([m, 1]); m.color.setScalar(fade.v);
     return m;
   }
@@ -199,14 +219,15 @@ function start() {
 
   /* ---------- load the room ---------- */
   const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
-  const groups = { monitor: [], phone: [], sound: [], board: [], pc: [], pylon: [], window: [], plane: [] };
+  const groups = { monitor: [], phone: [], sound: [], board: [], pc: [], pylon: [], window: [], plane: [], deck: [] };
   const groupRule = [
     ['monitor', /^(Monitor_|Keyboard_|Mouse)/], ['sound', /^(Speaker_|Headphones_|Hook_)/], ['board', /^(Draft_|Tube_)/],
     ['pc', /^PC_/], ['pylon', /^Pylon_/], ['window', /^Window_/], ['plane', /^Plane_/], ['phone', /^Phone_/]
   ];
   const nodes = [];
 
-  loader.load('assets/room/room-baked.glb', (gltf) => manifest.then((man) => {
+  let deck = null, film = null;
+  loader.load('assets/room/room-baked.glb', (gltf) => Promise.all([manifest, lmReady]).then(([man]) => {
     DETAIL = man;
     const root = gltf.scene;
     root.traverse((o) => {
@@ -218,17 +239,31 @@ function start() {
     scene.add(root);
     root.updateMatrixWorld(true);
     root.children.forEach((c) => nodes.push(c));
+    deck = buildDeck({ scene, renderer, texLoader, lowTier, rnd, aniso });
+    deck.rig.position.copy(B(3.72, 1.5, 0)); deck.rig.rotation.y = Math.PI / 2;
+    scene.add(deck.rig); deck.rig.updateMatrixWorld(true);
+    deck.captureEnv();
+    fx.origin.value.copy(deck.tt.getWorldPosition(new THREE.Vector3()));
+    SHOTS.deck = shot(deck.tt.localToWorld(new THREE.Vector3(-0.1, 0.06, 0.03)), deck.tt.localToWorld(new THREE.Vector3(-0.2, 0.86, 1.05)).sub(deck.tt.getWorldPosition(new THREE.Vector3())), 1.86);
+    groups.deck.push(deck.proxy);
+    film = makeFilm({ deck, heroKey, lowTier, onLand: landFilm });
     prepareAssembly();
     buildHotspots();
     setProgress(1);
-    if (reduced || sessionSeen()) { finishAssembly(); endBoot(); }
-    else playAssembly();
+    const gone = document.body.classList.contains('no-webgl');
+    if (reduced || sessionSeen() || location.hash.length > 1 || gone) { finishAssembly(); endBoot(); }
+    else openGate();
     loop();
   }), (e) => { if (e.total) setProgress(e.loaded / e.total * 0.9); }, () => fallback());
 
   function setProgress(p) { if (bootBar) bootBar.style.transform = `scaleX(${p})`; }
   function sessionSeen() { try { return sessionStorage.getItem('artem-built') === '1'; } catch (e) { return false; } }
 
+  const heroKey = () => {
+    const a = innerWidth / innerHeight; let dist = SHOTS.hero.dist;
+    if (a < 1) dist *= 1 + (1 - a) * 1.15 + (1 - a) * 0.35;
+    return { target: SHOTS.hero.target.clone(), dir: SHOTS.hero.dir.clone(), dist };
+  };
   const LIVE = /^(Monitor_Screen|Window_CityBackdrop|Window_Glass|Phone_Screen|PC_SideGlass)/;
   const phoneTex = new THREE.TextureLoader().load('assets/market/screen-1.png'); phoneTex.colorSpace = THREE.SRGBColorSpace; phoneTex.anisotropy = 8;
   function fixMaterial(o) {
@@ -236,11 +271,13 @@ function start() {
     if (!id) { o.material = bakedMat(o.material.name); return; }
     if (id.startsWith('Monitor_Screen')) { planarUV(o); o.material = new THREE.MeshBasicMaterial({ map: vtex, toneMapped: false, color: new THREE.Color(0.8, 0.8, 0.8) }); }
     else if (id.startsWith('Phone_Screen')) { phoneTex.flipY = false; o.material = new THREE.MeshBasicMaterial({ map: phoneTex, toneMapped: false, color: new THREE.Color(0.74, 0.74, 0.74) }); }
-    else if (id.startsWith('Window_CityBackdrop')) { planarUV(o); o.material = new THREE.MeshBasicMaterial({ map: T.city, toneMapped: false, color: new THREE.Color(0.78, 0.8, 0.95) }); }
+    else if (id.startsWith('Window_CityBackdrop')) { planarUV(o); o.material = new THREE.MeshBasicMaterial({ map: PAINTED.city, toneMapped: false, color: new THREE.Color(0.78, 0.8, 0.95) }); }
     else if (id.startsWith('Window_Glass')) { o.material = new THREE.MeshBasicMaterial({ color: 0x9fb4d8, transparent: true, opacity: 0.06, depthWrite: false }); }
     else { o.material = new THREE.MeshBasicMaterial({ color: 0x0a0b10, transparent: true, opacity: 0.7 }); }
     fade.mats.push([o.material, o.material.color.r]);
     o.material.userData.live = true;
+    o.material.onBeforeCompile = (sh) => patchFx(sh, false);
+    o.material.customProgramCacheKey = () => 'live';
   }
 
   function planarUV(mesh) {
@@ -273,26 +310,17 @@ function start() {
   /* ---------- the assembly: 304 objects find their place ---------- */
   const order = [/^(Floor_|Rug)/, /^(Wall_|Baseboard_)/, /^(Window_|Door_)/, /^(Desk_|Sofa_|Shelf_B|Shelf_S|Shelf_T|Shelf_K|Draft_Board|Draft_Leg|Draft_Foot|Draft_Pivot|Draft_Stretch|Draft_Shelf|Draft_Bracket|Chair_Root|PC_Case|Storage_)/, /.*/];
   const anim = [];
+  const ACCENT = 0.4054; // an eighth note at 74 BPM: the small things land on it
   function prepareAssembly() {
+    const starts = [T.accents[4], T.accents[5], T.accents[5] + 0.81, T.accents[6]];
     nodes.forEach((n) => {
       const tier = order.findIndex((re) => re.test(n.name));
       const base = { p: n.position.clone(), s: n.scale.clone(), r: n.rotation.y };
-      const delay = tier * 0.34 + rnd() * (tier === 4 ? 0.9 : 0.25);
-      anim.push({ n, base, tier, delay, dur: tier <= 1 ? 0.9 : 0.75 });
+      const delay = tier < 4 ? starts[tier] + rnd() * 0.22 : T.accents[6] + 0.81 + Math.round(rnd() * 3.4) * ACCENT;
+      anim.push({ n, base, tier, delay, dur: tier <= 1 ? 0.9 : 0.68 });
     });
   }
-  let assembling = false, aStart = 0, total = 0;
-  function playAssembly() {
-    assembling = true; aStart = performance.now(); total = Math.max(...anim.map((a) => a.delay + a.dur)) + 0.6;
-    setFade(0.12);
-    // the words come up with the room, not after it; hotspots wait for is-ready
-    document.body.classList.add('is-building');
-    document.body.classList.remove('is-loading');
-    clearTimeout(playAssembly.timer);
-    playAssembly.timer = setTimeout(() => { if (assembling) { finishAssembly(); endBoot(); } }, total * 1000 + 2500);
-  }
   function finishAssembly() {
-    assembling = false;
     anim.forEach(({ n, base }) => { n.position.copy(base.p); n.scale.copy(base.s); n.rotation.y = base.r; n.visible = true; });
     setFade(1);
     upgradeTextures();
@@ -300,8 +328,7 @@ function start() {
     document.body.classList.remove('is-building');
     try { sessionStorage.setItem('artem-built', '1'); } catch (e) { /* ignore */ }
   }
-  function stepAssembly(now) {
-    const t = (now - aStart) / 1000;
+  function stepAssembly(t) {
     let placed = 0;
     anim.forEach((a) => {
       const k = clamp((t - a.delay) / a.dur, 0, 1); const e = 1 - Math.pow(1 - k, 4);
@@ -314,21 +341,120 @@ function start() {
       if (k >= 1) placed++;
     });
     if (bootCount) bootCount.textContent = String(Math.round(placed / anim.length * 304));
-    const lt = clamp((t - (total - 1.4)) / 1.0, 0, 1);
-    setFade(0.12 + 0.88 * smooth(lt));
-    if (t > total) { finishAssembly(); endBoot(); }
+    if (bootEl) bootEl.classList.toggle('is-done', !(t > T.accents[4] && t < T.drop));
   }
-  const skip = () => { if (assembling) { finishAssembly(); endBoot(); } };
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') skip(); });
-  addEventListener('wheel', skip, { passive: true });
-  addEventListener('touchmove', skip, { passive: true });
+
+  /* ---------- the intro: gate, film, landing ---------- */
+  const audio = APP.audio;
+  const gateEl = document.getElementById('gate'), skipEl = document.getElementById('filmSkip');
+  const mainEl = document.getElementById('main'), footEl = document.querySelector('.foot');
+  let gateOpen = false, warp = false, opened = false, songT = T.start;
+  const setInert = (on) => { [mainEl, footEl].forEach((el) => { if (el) el.inert = on; }); };
+  const ringLines = async () => {
+    try { await document.fonts.load('600 104px Tektur', 'ARTEM АРТЁМ'); } catch (e) { /* fall back to the stack */ }
+    return ['film.r1', 'film.r2', 'film.r3'].map((k) => APP.t(k));
+  };
+  function holdRoom() { stepAssembly(0); fx.dim.value = 0.08; fx.radius.value = 0; fx.edge.value = 0; }
+  function openGate() {
+    gateOpen = true; film.on = true; holdRoom();
+    film.prepare(); deck.key.shadow.autoUpdate = true;
+    setInert(true);
+    document.body.classList.remove('is-loading');
+    document.body.classList.add('is-gate');
+    if (bootEl) bootEl.classList.add('is-done');
+    const first = document.getElementById('gateSound'); if (first) first.focus({ preventScroll: true });
+  }
+  async function beginFilm(quiet) {
+    if (!gateOpen && film.on) return;
+    audio.startFilm(T.start, quiet); // inside the click: this is the one chance iOS gives
+    gateOpen = false; film.on = true; warp = opened = false; songT = T.start;
+    film.t = T.start; deck.setSpin(true); holdRoom();
+    document.body.classList.remove('is-gate', 'is-ready');
+    document.body.classList.add('is-film');
+    setInert(true);
+    film.prepare(await ringLines());
+    film.on = true;
+  }
+  function landFilm() {
+    document.body.classList.remove('is-film');
+    document.body.classList.add('is-building');
+    setInert(false);
+    if (bootEl) bootEl.classList.add('is-done');
+  }
+  function endFilm() {
+    film.end();
+    scene.environmentIntensity = 1; fx.dim.value = 1; fx.radius.value = 1e3; fx.edge.value = 0;
+    if (bokeh) bokeh.enabled = false;
+    if (bloom) bloom.strength = BLOOM;
+    camera.fov = 30;
+    deck.key.intensity = deck.KEY; deck.kick.intensity = deck.KICK; deck.fill.intensity = deck.FILL; deck.macro.intensity = 0;
+    finishAssembly(); endBoot();
+  }
+  function songClock(dt) {
+    const el = audio.el;
+    if (warp) {
+      songT += dt * 8;
+      if (songT >= T.drop - 0.25) { warp = false; songT = T.drop - 0.25; audio.seek(songT); audio.openNeedle(true); opened = true; }
+      return songT;
+    }
+    if (!audio.state.failed && !el.paused && el.readyState >= 2 && el.currentTime >= T.start - 0.4) songT = el.currentTime; else songT += dt;
+    return songT;
+  }
+  function filmCues(t) {
+    if (!opened && t >= T.open) { opened = true; audio.openNeedle(true); }
+    stepAssembly(t);
+  }
+  const skip = () => {
+    if (!film || !film.on || gateOpen || warp || film.t >= T.drop - 0.3) return;
+    warp = true; audio.openNeedle(false, 0.05);
+  };
+  document.getElementById('gateSound')?.addEventListener('click', () => beginFilm(false));
+  document.getElementById('gateQuiet')?.addEventListener('click', () => beginFilm(true));
+  skipEl?.addEventListener('click', skip);
+  addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (listening) APP.listen(false); else skip();
+  });
+  addEventListener('wheel', () => { skip(); if (listening && !volDrag) APP.listen(false); }, { passive: true });
+  addEventListener('touchmove', () => { skip(); if (listening && !volDrag) APP.listen(false); }, { passive: true });
   if (bootEl) bootEl.addEventListener('click', skip);
   APP.replay = () => {
-    try { sessionStorage.removeItem('artem-built'); } catch (e) { /* ignore */ }
-    if (reduced) return;
-    document.body.classList.remove('is-ready'); bootEl && bootEl.classList.remove('is-done');
-    setTimeout(playAssembly, 500);
+    if (reduced || !film || film.on) return;
+    gateOpen = false; beginFilm(audio.state.muted);
   };
+
+  /* ---------- by the turntable ---------- */
+  let listening = false, volDrag = null;
+  const listenBar = document.getElementById('listenBar');
+  APP.listen = (v) => {
+    const on = v === 'toggle' ? !listening : !!v;
+    if (on === listening || (film && film.on) || !deck) return;
+    listening = on;
+    document.body.classList.toggle('is-listening', on);
+    if (on && scrollY > 4) scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+    if (on) listenBar?.querySelector('button')?.focus({ preventScroll: true });
+  };
+  document.getElementById('listenClose')?.addEventListener('click', () => APP.listen(false));
+  const deckRay = (e) => {
+    pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+    ray.setFromCamera(pointer, camera);
+    const p = deck.picks; const list = [p.start, p.vinyl, p.label, p.clamp, p.volume];
+    const hit = ray.intersectObjects(list, false)[0];
+    return hit ? (hit.object === p.volume ? 'volume' : 'play') : null;
+  };
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!listening || deckRay(e) !== 'volume') return;
+    volDrag = { y: e.clientY, x: e.clientX, v: audio.state.vol };
+    canvas.setPointerCapture?.(e.pointerId); e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (volDrag) { audio.unlock(); audio.setVolume(volDrag.v + ((volDrag.y - e.clientY) + (e.clientX - volDrag.x)) / 220); }
+    else if (listening) canvas.style.cursor = deckRay(e) ? 'pointer' : '';
+  });
+  addEventListener('pointerup', () => { volDrag = null; });
+  canvas.addEventListener('wheel', (e) => {
+    if (listening && deckRay(e) === 'volume') { e.stopPropagation(); audio.setVolume(audio.state.vol - e.deltaY / 900); }
+  }, { passive: true });
 
   /* ---------- camera shots ---------- */
   const heroDir = B(13.48, -9.48, 12.77).sub(B(1.95, 2.0, 0.95)).normalize();
@@ -344,7 +470,7 @@ function start() {
     window: shot(B(1.6, 4.1, 1.5), B(0.06, -1, 0.06), 2.7),
     plane: shot(B(0.22, 3.4, 2.07), B(1, -0.85, 0.3), 0.75)
   };
-  const SIDE = { hero: 0.25, monitor: 0.2, phone: -0.2, sound: 0.2, board: 0.2, pc: -0.2, pylon: -0.2, window: 0.2, plane: 0.2 };
+  const SIDE = { hero: 0.25, monitor: 0.2, phone: -0.2, sound: 0.2, board: 0.2, pc: -0.2, pylon: -0.2, window: 0.2, plane: 0.2, deck: 0 };
   const sections = Array.from(document.querySelectorAll('[data-shot]'));
   const cur = { target: SHOTS.hero.target.clone(), dir: SHOTS.hero.dir.clone(), dist: SHOTS.hero.dist, side: SIDE.hero, heroW: 1 };
   const want = { target: new THREE.Vector3(), dir: new THREE.Vector3(), dist: 0, side: 0, heroW: 1 };
@@ -365,6 +491,7 @@ function start() {
     want.dist = THREE.MathUtils.lerp(A.dist, Bs.dist, t);
     want.side = THREE.MathUtils.lerp(SIDE[a] ?? 0.2, SIDE[b] ?? 0.2, t);
     want.heroW = clamp(1 - p * 1.6, 0, 1);
+    if (listening && SHOTS.deck) { const D = SHOTS.deck; want.target.copy(D.target); want.dir.copy(D.dir); want.dist = D.dist; want.side = SIDE.deck; want.heroW = 0; }
   }
 
   // A drag in the hero turns the room a little; it springs back on release.
@@ -381,7 +508,7 @@ function start() {
 
   /* ---------- hover and hotspots ---------- */
   const pointer = new THREE.Vector2(9, 9); const ray = new THREE.Raycaster();
-  const SECTION = { monitor: 'jobsearch', phone: 'market', sound: 'gomini', board: 'room', pc: 'agents', pylon: 'roots', window: 'contact' };
+  const SECTION = { monitor: 'jobsearch', phone: 'market', sound: 'gomini', board: 'room', pc: 'agents', pylon: 'roots', window: 'contact', deck: '' };
   const hotKeys = Object.keys(SECTION);
   const anchors = {}; const buttons = {};
   let hovered = null;
@@ -392,6 +519,7 @@ function start() {
       const c = box.getCenter(new THREE.Vector3()); c.y = box.max.y + 0.06;
       if (k === 'window') c.y = box.min.y + (box.max.y - box.min.y) * 0.75;
       if (k === 'pc') c.y = box.max.y - 0.05;
+      if (k === 'deck') c.y = 0.34; // on the console doors, so the marker never covers the record
       anchors[k] = c;
       groups[k].forEach((m) => {
         if (glowMats.has(m) || m.material.userData.live) return;
@@ -410,6 +538,7 @@ function start() {
     APP.onLang.push(() => hotKeys.forEach((k) => { buttons[k].querySelector('.hotspot-label').textContent = APP.t('hs.' + k); }));
   }
   function go(k) {
+    if (k === 'deck') { APP.listen(true); return; }
     const el = document.getElementById(SECTION[k]); if (!el) return;
     el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
     const f = el.querySelector('h2'); if (f) { f.tabIndex = -1; setTimeout(() => f.focus({ preventScroll: true }), reduced ? 0 : 900); }
@@ -422,7 +551,11 @@ function start() {
     Object.entries(hoverMats).forEach(([hk, m]) => m.color.setScalar(fade.v * (hk.split('|')[0] === k ? 1.32 : 1)));
     canvas.style.cursor = k ? 'pointer' : '';
   }
-  canvas.addEventListener('click', () => { if (drag.moved > 6) return; if (hovered && cur.heroW > 0.4) go(hovered); });
+  canvas.addEventListener('click', (e) => {
+    if (drag.moved > 6) return;
+    if (listening) { if (deckRay(e) === 'play') audio.toggle(); return; }
+    if (hovered && cur.heroW > 0.4) go(hovered);
+  });
   const hoverables = () => hotKeys.flatMap((k) => groups[k].map((m) => [m, k]));
   let hoverList = null;
   function pick() {
@@ -448,44 +581,90 @@ function start() {
   }
 
   /* ---------- frame loop ---------- */
-  let last = performance.now(); let frameSkip = 0;
+  let last = performance.now(); let frameSkip = 0, frameCount = 0;
   function resize() {
     const w = innerWidth, h = innerHeight;
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
     if (composer) { composer.setSize(w, h); bloom.resolution.set(w / 2, h / 2); }
+    if (film) film.rebuild();
   }
   addEventListener('resize', resize); resize();
 
   const camPos = new THREE.Vector3();
+  const beat = { t: 9 };
+  const woofers = anim.filter((a) => /^Speaker_[LR]_(Woofer|DustCap)$/.test(a.n.name));
+  let lit = 0;
+  function syncDeck() {
+    const el = audio.el, playing = !el.paused || film.on, st = audio.state;
+    deck.setSpin(playing);
+    if (st.started) { deck.arm.wantYaw = deck.yawFor(deck.rFor((film.on ? film.t : el.currentTime) / (el.duration || 247))); deck.arm.wantLift = playing ? 0 : 0.9; }
+    else { deck.arm.wantYaw = deck.restYaw; deck.arm.wantLift = 0.46; }
+  }
+  // The room plays along: a ripple from the record on each kick, bloom breathing with the bass.
+  function reactToMusic(s, dt, weight) {
+    beat.t += dt;
+    if (s.pulse > 0.42 && beat.t > 0.34 && !reduced) beat.t = 0;
+    fx.rip.value = beat.t * 7.5;
+    fx.ripA.value = reduced ? 0 : Math.max(0, 1 - beat.t / 0.85) * 0.34 * weight;
+    if (bloom) bloom.strength = BLOOM + s.bass * 0.2 * weight;
+    hotspotsEl.style.setProperty('--beat', s.pulse.toFixed(3));
+    woofers.forEach(({ n, base }) => { n.position.x = base.p.x + (reduced ? 0 : s.pulse * 0.007); }); // the cones on the shelf push on the kick
+  }
   function loop(now = performance.now()) {
     requestAnimationFrame(loop);
     if (document.hidden) return;
     if (lowTier && (frameSkip++ & 1)) return;
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    if (assembling) stepAssembly(now);
+    const heard = audio.sample(dt);
+    if (film.on) {
+      const t = gateOpen ? T.start : songClock(dt);
+      if (!gateOpen) filmCues(t);
+      if (film.update(t, now, dt)) endFilm();
+    }
+    if (!film.on || film.t > T.touch) syncDeck();
+    deck.setVolumeKnob(audio.state.muted ? 0 : audio.state.vol);
+    deck.update(dt, heard.level);
     desired();
-    const k = reduced ? 1 : 1 - Math.exp(-dt * 3.4);
+    const k = reduced ? 1 : 1 - Math.exp(-dt * (listening ? 2.4 : 3.4));
     cur.target.lerp(want.target, k); cur.dir.lerp(want.dir, k).normalize();
     cur.dist += (want.dist - cur.dist) * k; cur.side += (want.side - cur.side) * k; cur.heroW += (want.heroW - cur.heroW) * k;
     if (!drag.on) { drag.yaw *= reduced ? 0 : 0.92; drag.pitch *= reduced ? 0 : 0.92; }
-    const d = cur.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), drag.yaw * cur.heroW);
-    d.y = clamp(d.y + drag.pitch * cur.heroW, -0.2, 0.95); d.normalize();
-    let dist = cur.dist;
-    const aspect = innerWidth / innerHeight;
-    if (aspect < 1) dist *= 1 + (1 - aspect) * 1.15 * cur.heroW + (1 - aspect) * 0.35;
-    camPos.copy(cur.target).addScaledVector(d, dist);
-    camera.position.copy(camPos); camera.lookAt(cur.target);
-    // depth range follows the shot: a fixed 0.05 near plane z-fights trim against the wall from 14 m out
-    camera.near = clamp(dist * 0.3, 0.05, 4); camera.far = dist + 16;
     const w = innerWidth, h = innerHeight;
-    if (narrow()) camera.setViewOffset(w, h, 0, h * 0.2, w, h); else camera.setViewOffset(w, h, -cur.side * w, 0, w, h);
-    pick();
+    if (film.on) {
+      const c = film.cam;
+      camera.position.copy(c.pos); camera.lookAt(c.tgt);
+      camera.fov = c.fov; camera.near = clamp(c.dist * 0.3, 0.008, 4); camera.far = c.dist + 16;
+      if (narrow()) camera.setViewOffset(w, h, 0, h * 0.2 * c.sideK, w, h); else camera.setViewOffset(w, h, -SIDE.hero * w * c.sideK, 0, w, h);
+      fx.dim.value = c.dim; fx.radius.value = c.radius; fx.edge.value = c.edge;
+      scene.environmentIntensity = c.env;
+      if (bokeh) { bokeh.enabled = c.aperture > 1e-6; bokeh.uniforms.focus.value = c.dist; bokeh.uniforms.aperture.value = c.aperture; }
+      if (bloom) bloom.strength = BLOOM + c.pulse * 0.5;
+      if (!gateOpen && film.t > T.drop) reactToMusic(heard, dt, 1);
+    } else {
+      const d = cur.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), drag.yaw * cur.heroW);
+      d.y = clamp(d.y + drag.pitch * cur.heroW, -0.2, 0.95); d.normalize();
+      let dist = cur.dist;
+      const aspect = w / h;
+      if (aspect < 1) dist *= 1 + (1 - aspect) * 1.15 * cur.heroW + (1 - aspect) * 0.35;
+      camPos.copy(cur.target).addScaledVector(d, dist);
+      camera.position.copy(camPos); camera.lookAt(cur.target);
+      // depth range follows the shot: a fixed 0.05 near plane z-fights trim against the wall from 14 m out
+      camera.near = clamp(dist * 0.3, 0.05, 4); camera.far = dist + 16;
+      if (narrow()) camera.setViewOffset(w, h, 0, h * 0.2, w, h); else camera.setViewOffset(w, h, -cur.side * w, 0, w, h);
+      pick();
+      reactToMusic(heard, dt, cur.heroW);
+      deck.key.shadow.autoUpdate = listening;
+      lit += ((listening ? 1 : 0) - lit) * (1 - Math.exp(-dt * 3));
+      deck.key.intensity = deck.KEY + lit * 0.9; deck.kick.intensity = deck.KICK + lit * 3.4;
+      if (!listening && !(frameCount % 24)) deck.key.shadow.needsUpdate = true;
+    }
+    frameCount++;
     const vidWanted = cur.heroW > 0.2 || cur.target.distanceTo(SHOTS.monitor.target) < 0.9;
     if (!video.paused && video.currentTime !== screenDesk.last) { screenDesk.last = video.currentTime; drawDesktop(); }
     if (vidWanted && video.paused && !reduced) video.play().catch(() => {});
     else if (!vidWanted && !video.paused) video.pause();
     if (composer) composer.render(); else renderer.render(scene, camera);
-    if (!sampled && nodes.length && !assembling) sampleBackground();
+    if (!sampled && nodes.length && !film.on) sampleBackground();
     placeHotspots();
   }
 }
