@@ -50,7 +50,8 @@
 
   /* ---------- nav ---------- */
   const nav = $('#nav');
-  const onScroll = () => nav.classList.toggle('is-solid', scrollY > 40);
+  let navSolid = null;
+  const onScroll = () => { const on = scrollY > 40; if (on !== navSolid) { navSolid = on; nav.classList.toggle('is-solid', on); } };
   addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
   /* ---------- Job Search: marker demo ---------- */

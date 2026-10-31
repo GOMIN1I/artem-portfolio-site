@@ -52,6 +52,7 @@ function start() {
   scene.background = BG;
 
   const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 80);
+  let W = 0, H = 0, q = 0, scrollAt = 0;
 
   let composer = null, bloom = null, bokeh = null;
   if (!lowTier) {
@@ -115,26 +116,44 @@ function start() {
   LM.colorSpace = THREE.SRGBColorSpace; LM.flipY = false; LM.anisotropy = aniso; LM.channel = 1;
   const manifest = fetch('assets/room/detail/manifest.json').then((r) => r.json()).catch(() => ({}));
   const detailTex = {};
+  let detailPending = 0, detailWait = null;
+  const detailLoaded = () => { if (--detailPending <= 0 && detailWait) detailWait(); };
   const detailFor = (set) => {
     if (!detailTex[set]) {
-      const t = texLoader.load(`assets/room/detail/${set}-m.jpg`);
+      const t = texLoader.load(`assets/room/detail/${set}-m.jpg`, () => detailLoaded(), undefined, () => detailLoaded());
+      detailPending++;
       t.colorSpace = THREE.NoColorSpace; t.flipY = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = aniso;
       detailTex[set] = t;
     }
     return detailTex[set];
   };
   let upgraded = false;
+  const upgrades = [];
+  let upgradeAt = Infinity, upgrading = false;
   function upgradeTextures() {
-    if (upgraded || lowTier || navigator.connection?.saveData) return;
+    if (upgraded || lowTier || (navigator.hardwareConcurrency || 8) < 8 || navigator.connection?.saveData) return;
     upgraded = true;
-    // a new texture object per swap: WebGL2 storage keeps the first upload's size
-    const swap = (old, url) => texLoader.load(url, (full) => {
+    upgrades.push([LM, 'assets/room/lightmap-4k.jpg']);
+    Object.entries(detailTex).forEach(([set, t]) => upgrades.push([t, `assets/room/detail/${set}.jpg`]));
+    upgradeAt = performance.now() + 2500;
+  }
+  // One texture at a time, decoded off the main thread, and only while nothing on screen is moving:
+  // a 4K upload is the single longest stall on the page, so it must never land on a scroll or a camera move.
+  const bitmaps = new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+  function upgradeNext(now) {
+    if (upgrading || !upgrades.length || now < upgradeAt || now - scrollAt < 1500 || q > 0 || film.on || listening) return;
+    upgrading = true;
+    const [old, url] = upgrades.shift();
+    const done = () => { upgrading = false; upgradeAt = performance.now() + 1200; };
+    bitmaps.load(url, (bitmap) => {
+      // a new texture object per swap: WebGL2 storage keeps the first upload's size
+      const full = new THREE.Texture(bitmap); full.needsUpdate = true;
       ['colorSpace', 'flipY', 'wrapS', 'wrapT', 'anisotropy', 'channel'].forEach((k) => { full[k] = old[k]; });
-      fade.mats.forEach(([m]) => { if (m.lightMap === old) m.lightMap = full; if (m.map === old) m.map = full; });
+      renderer.initTexture(full);
+      [...fade.mats.map(([m]) => m)].forEach((m) => { if (m.lightMap === old) m.lightMap = full; if (m.map === old) m.map = full; });
       old.dispose();
-    });
-    swap(LM, 'assets/room/lightmap-4k.jpg');
-    Object.entries(detailTex).forEach(([set, t]) => swap(t, `assets/room/detail/${set}.jpg`));
+      done();
+    }, undefined, done);
   }
   let DETAIL = {};
   function makeBaked(name) {
@@ -159,9 +178,16 @@ function start() {
   const still = new Image(); still.src = 'assets/jobsearch/demo-search.jpg'; still.onload = () => drawDesktop();
   // The monitor shows a whole desktop: the app window at its true 16:10, a taskbar of the projects on this page.
   const screenDesk = { c: document.createElement('canvas'), last: -1 };
-  screenDesk.c.width = 1600; screenDesk.c.height = 880; // the screen face is 0.60 by 0.33 m
+  // Drawn in 1600 by 880 units (the screen face is 0.60 by 0.33 m) on a canvas sized to what the device can re-upload.
+  const DW = 1600, DH = 880, dk = lowTier ? 0.5 : 0.75;
+  screenDesk.c.width = DW * dk; screenDesk.c.height = DH * dk;
   screenDesk.g = screenDesk.c.getContext('2d');
-  const vtex = new THREE.CanvasTexture(screenDesk.c); vtex.colorSpace = THREE.SRGBColorSpace; vtex.anisotropy = 8;
+  const deskBase = document.createElement('canvas'); deskBase.width = screenDesk.c.width; deskBase.height = screenDesk.c.height;
+  const deskBaseG = deskBase.getContext('2d'); deskBaseG.scale(dk, dk);
+  let baseDirty = true;
+  const vtex = new THREE.CanvasTexture(screenDesk.c); vtex.colorSpace = THREE.SRGBColorSpace;
+  // re-uploaded many times a second: no mipmap chain to rebuild each time
+  vtex.generateMipmaps = false; vtex.minFilter = THREE.LinearFilter;
   const TB = 64;
   function wallpaper(g, W, H) {
     const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, '#0f3b3d'); gr.addColorStop(1, '#1a1640'); g.fillStyle = gr; g.fillRect(0, 0, W, H - TB);
@@ -192,11 +218,16 @@ function start() {
     g.fillStyle = 'rgba(255,255,255,0.88)'; g.font = '400 19px Onest, sans-serif'; g.textAlign = 'right';
     g.fillText('02:14', W - 28, y + 28); g.fillStyle = 'rgba(255,255,255,0.6)'; g.font = '400 16px Onest, sans-serif'; g.fillText(APP.lang === 'ru' ? 'РУС' : 'ENG', W - 112, y + 38); g.fillText('29.10.2026', W - 28, y + 50); g.textAlign = 'left';
   }
-  function drawDesktop() {
-    const g = screenDesk.g, W = screenDesk.c.width, H = screenDesk.c.height;
-    wallpaper(g, W, H);
+  const deskWindow = () => {
     const ar = (video.videoWidth / video.videoHeight) || 1.6, bar = 34;
-    const vh = H - TB - 2 * 22 - bar, vw = vh * ar, x = (W - vw) / 2, y = 22;
+    const vh = DH - TB - 2 * 22 - bar, vw = vh * ar;
+    return { bar, vh, vw, x: (DW - vw) / 2, y: 22 };
+  };
+  // The desktop around the app only changes with the language, so it is painted once and reused.
+  function paintDeskBase() {
+    baseDirty = false;
+    const g = deskBaseG, { bar, vh, vw, x, y } = deskWindow();
+    wallpaper(g, DW, DH);
     g.fillStyle = 'rgba(0,0,0,0.35)'; roundRect(g, x + 4, y + 8, vw, vh + bar, 12); g.fill();
     g.save(); roundRect(g, x, y, vw, vh + bar, 12); g.clip();
     g.fillStyle = '#eef2ee'; g.fillRect(x, y, vw, bar);
@@ -206,16 +237,24 @@ function start() {
     g.beginPath(); g.moveTo(cx - 128, y + 17); g.lineTo(cx - 116, y + 17); g.stroke();
     g.strokeRect(cx - 80, y + 11, 11, 11);
     g.beginPath(); g.moveTo(cx - 32, y + 11); g.lineTo(cx - 21, y + 22); g.moveTo(cx - 21, y + 11); g.lineTo(cx - 32, y + 22); g.stroke();
+    g.restore();
+    taskbar(g, DW, DH);
+  }
+  function drawDesktop() {
+    if (baseDirty) paintDeskBase();
+    const g = screenDesk.g, { bar, vh, vw, x, y } = deskWindow();
+    g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(deskBase, 0, 0); g.setTransform(dk, 0, 0, dk, 0, 0);
+    g.save(); roundRect(g, x, y, vw, vh + bar, 12); g.clip();
     if (video.readyState >= 2) g.drawImage(video, x, y + bar, vw, vh);
     else if (still.complete && still.naturalWidth) g.drawImage(still, x, y + bar, vw, vh);
     else { g.fillStyle = '#f6f8f4'; g.fillRect(x, y + bar, vw, vh); }
     g.restore();
-    taskbar(g, W, H);
     vtex.needsUpdate = true;
   }
-  video.addEventListener('loadeddata', drawDesktop); video.addEventListener('canplay', drawDesktop); video.addEventListener('pause', drawDesktop);
-  APP.onLang.push(drawDesktop);
-  if (document.fonts) document.fonts.ready.then(drawDesktop);
+  const redrawDesktop = () => { baseDirty = true; drawDesktop(); };
+  video.addEventListener('loadeddata', redrawDesktop); video.addEventListener('canplay', drawDesktop); video.addEventListener('pause', drawDesktop);
+  APP.onLang.push(redrawDesktop);
+  if (document.fonts) document.fonts.ready.then(redrawDesktop);
 
   /* ---------- load the room ---------- */
   const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
@@ -227,7 +266,7 @@ function start() {
   const nodes = [];
 
   let deck = null, film = null;
-  loader.load('assets/room/room-baked.glb', (gltf) => Promise.all([manifest, lmReady]).then(([man]) => {
+  loader.load('assets/room/room-baked.glb', (gltf) => Promise.all([manifest, lmReady]).then(async ([man]) => {
     DETAIL = man;
     const root = gltf.scene;
     root.traverse((o) => {
@@ -249,6 +288,7 @@ function start() {
     film = makeFilm({ deck, heroKey, lowTier, onLand: landFilm });
     prepareAssembly();
     buildHotspots();
+    await warmUp();
     setProgress(1);
     const gone = document.body.classList.contains('no-webgl');
     if (reduced || sessionSeen() || location.hash.length > 1 || gone) { finishAssembly(); endBoot(); }
@@ -256,6 +296,16 @@ function start() {
     loop();
   }), (e) => { if (e.total) setProgress(e.loaded / e.total * 0.9); }, () => fallback());
 
+  // Shaders and textures reach the GPU behind the boot screen, a step per frame, not all in the first visible render.
+  async function warmUp() {
+    const frame = () => new Promise((res) => requestAnimationFrame(res));
+    if (detailPending > 0) await Promise.race([new Promise((res) => { detailWait = res; }), new Promise((res) => setTimeout(res, 4000))]);
+    try { await renderer.compileAsync(scene, camera); } catch (e) { /* the first render compiles instead */ }
+    for (const t of [LM, ...Object.values(detailTex), PAINTED.city, phoneTex, vtex]) {
+      if (t.image) renderer.initTexture(t);
+      await frame();
+    }
+  }
   function setProgress(p) { if (bootBar) bootBar.style.transform = `scaleX(${p})`; }
   function sessionSeen() { try { return sessionStorage.getItem('artem-built') === '1'; } catch (e) { return false; } }
 
@@ -298,8 +348,10 @@ function start() {
   }
 
   // The tone-mapped clear colour is what the eye sees, so the page takes its stage colour from a real pixel.
-  let sampled = false; const px = new Uint8Array(4);
+  let sampled = false, sampleTries = 0; const px = new Uint8Array(4);
   function sampleBackground() {
+    // readPixels waits for the GPU, so it gets a few spaced tries, not one per frame
+    if (frameCount % 30 || ++sampleTries > 6) return;
     const gl = renderer.getContext();
     gl.readPixels(2, 2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
     if (px[0] + px[1] + px[2] < 6) return;
@@ -436,7 +488,7 @@ function start() {
   };
   document.getElementById('listenClose')?.addEventListener('click', () => APP.listen(false));
   const deckRay = (e) => {
-    pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+    pointer.set((e.clientX / W) * 2 - 1, -(e.clientY / H) * 2 + 1);
     ray.setFromCamera(pointer, camera);
     const p = deck.picks; const list = [p.start, p.vinyl, p.label, p.clamp, p.volume];
     const hit = ray.intersectObjects(list, false)[0];
@@ -503,7 +555,7 @@ function start() {
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
       drag.yaw = clamp(drag.yaw - dx * 0.004, -0.6, 0.6); drag.pitch = clamp(drag.pitch + dy * 0.003, -0.25, 0.3);
     }
-    pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); pointer.dirty = true; pointer.over = e.target === canvas;
+    pointer.set((e.clientX / W) * 2 - 1, -(e.clientY / H) * 2 + 1); pointer.dirty = true; pointer.over = e.target === canvas;
   });
 
   /* ---------- hover and hotspots ---------- */
@@ -558,8 +610,9 @@ function start() {
   });
   const hoverables = () => hotKeys.flatMap((k) => groups[k].map((m) => [m, k]));
   let hoverList = null;
-  function pick() {
-    if (!pointer.dirty || drag.on) return; pointer.dirty = false;
+  let pickAt = 0;
+  function pick(now) {
+    if (!pointer.dirty || drag.on || now - pickAt < 80) return; pointer.dirty = false; pickAt = now;
     if (!pointer.over || cur.heroW < 0.4) { if (hovered && !document.activeElement?.classList.contains('hotspot')) setHover(null); return; }
     hoverList = hoverList || hoverables();
     ray.setFromCamera(pointer, camera);
@@ -572,7 +625,7 @@ function start() {
     const vis = cur.heroW > 0.55 && document.body.classList.contains('is-ready');
     hotspotsEl.classList.toggle('is-visible', vis);
     if (!vis) return;
-    const w = innerWidth, h = innerHeight;
+    const w = W, h = H;
     hotKeys.forEach((k) => {
       v3.copy(anchors[k]).project(camera);
       const x = (v3.x * 0.5 + 0.5) * w, y = (-v3.y * 0.5 + 0.5) * h;
@@ -581,14 +634,46 @@ function start() {
   }
 
   /* ---------- frame loop ---------- */
-  let last = performance.now(); let frameSkip = 0, frameCount = 0;
+  let last = performance.now(); let frameSkip = 0, frameCount = 0, deskAt = 0;
+  // The canvas is 100lvh, so a phone's address bar sliding away changes nothing here.
   function resize() {
-    const w = innerWidth, h = innerHeight;
+    const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
+    if (w === W && h === H) return;
+    W = w; H = h;
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
     if (composer) { composer.setSize(w, h); bloom.resolution.set(w / 2, h / 2); }
+    applyQuality();
     if (film) film.rebuild();
   }
+
+  /* ---------- quality: starts from the screen, then follows what the device actually delivers ---------- */
+  const PIXELS = lowTier ? [1.4, 1, 0.7] : [4.5, 2.6, 2.6, 1.6, 1]; // megapixels per level
+  let useComposer = !!composer, shadowEvery = 24;
+  function applyQuality() {
+    const pr = Math.min(devicePixelRatio, lowTier ? 1.5 : 2, Math.sqrt(PIXELS[q] * 1e6 / (W * H)));
+    renderer.setPixelRatio(pr);
+    if (composer) composer.setPixelRatio(pr);
+    if (bloom) bloom.enabled = q < 2;
+    useComposer = !!composer && q < 3;
+    shadowEvery = q === 0 ? 24 : q === 1 ? 60 : 0;
+    APP.quality = q;
+  }
+  const gov = { from: 0, buf: [] };
+  function govern(now, ms) {
+    if (ms > 2000) { gov.buf.length = 0; return; } // back from a hidden tab
+    if (!gov.from) gov.from = now + 2000; // the first seconds carry start-up work, not the steady rate
+    if (now < gov.from) return;
+    gov.buf.push(ms);
+    if (gov.buf.length < 40 && (gov.buf.length < 5 || now - gov.from < 1500)) return;
+    const median = gov.buf.sort((a, b) => a - b)[gov.buf.length >> 1]; gov.buf.length = 0; gov.from = now;
+    const limit = lowTier ? 42 : 23;
+    if (median > limit && q < PIXELS.length - 1) {
+      q = Math.min(PIXELS.length - 1, q + (median > limit * 4 ? 3 : median > limit * 2 ? 2 : 1)); // a far-off device should not crawl down step by step
+      applyQuality(); gov.from = now + 800;
+    }
+  }
   addEventListener('resize', resize); resize();
+  addEventListener('scroll', () => { scrollAt = performance.now(); }, { passive: true });
 
   const camPos = new THREE.Vector3();
   const beat = { t: 9 };
@@ -607,13 +692,14 @@ function start() {
     fx.rip.value = beat.t * 7.5;
     fx.ripA.value = reduced ? 0 : Math.max(0, 1 - beat.t / 0.85) * 0.34 * weight;
     if (bloom) bloom.strength = BLOOM + s.bass * 0.2 * weight;
-    hotspotsEl.style.setProperty('--beat', s.pulse.toFixed(3));
+    if (cur.heroW > 0.55) hotspotsEl.style.setProperty('--beat', s.pulse.toFixed(1));
     woofers.forEach(({ n, base }) => { n.position.x = base.p.x + (reduced ? 0 : s.pulse * 0.007); }); // the cones on the shelf push on the kick
   }
   function loop(now = performance.now()) {
     requestAnimationFrame(loop);
     if (document.hidden) return;
-    if (lowTier && (frameSkip++ & 1)) return;
+    if (lowTier ? frameSkip++ & 1 : now - last < 13) return; // 120 Hz screens get 60 from this scene
+    govern(now, now - last);
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     const heard = audio.sample(dt);
     if (film.on) {
@@ -629,7 +715,7 @@ function start() {
     cur.target.lerp(want.target, k); cur.dir.lerp(want.dir, k).normalize();
     cur.dist += (want.dist - cur.dist) * k; cur.side += (want.side - cur.side) * k; cur.heroW += (want.heroW - cur.heroW) * k;
     if (!drag.on) { drag.yaw *= reduced ? 0 : 0.92; drag.pitch *= reduced ? 0 : 0.92; }
-    const w = innerWidth, h = innerHeight;
+    const w = W, h = H;
     if (film.on) {
       const c = film.cam;
       camera.position.copy(c.pos); camera.lookAt(c.tgt);
@@ -651,19 +737,22 @@ function start() {
       // depth range follows the shot: a fixed 0.05 near plane z-fights trim against the wall from 14 m out
       camera.near = clamp(dist * 0.3, 0.05, 4); camera.far = dist + 16;
       if (narrow()) camera.setViewOffset(w, h, 0, h * 0.2, w, h); else camera.setViewOffset(w, h, -cur.side * w, 0, w, h);
-      pick();
+      pick(now);
       reactToMusic(heard, dt, cur.heroW);
       deck.key.shadow.autoUpdate = listening;
       lit += ((listening ? 1 : 0) - lit) * (1 - Math.exp(-dt * 3));
       deck.key.intensity = deck.KEY + lit * 0.9; deck.kick.intensity = deck.KICK + lit * 3.4;
-      if (!listening && !(frameCount % 24)) deck.key.shadow.needsUpdate = true;
+      if (!listening && shadowEvery && !(frameCount % shadowEvery)) deck.key.shadow.needsUpdate = true;
     }
     frameCount++;
     const vidWanted = cur.heroW > 0.2 || cur.target.distanceTo(SHOTS.monitor.target) < 0.9;
-    if (!video.paused && video.currentTime !== screenDesk.last) { screenDesk.last = video.currentTime; drawDesktop(); }
+    // the screen is a few pixels in the wide shot and fills the frame only in its own section
+    const deskStep = cur.target.distanceTo(SHOTS.monitor.target) < 0.9 ? (lowTier ? 100 : 66) : 250;
+    if (!video.paused && video.currentTime !== screenDesk.last && now - deskAt >= deskStep) { screenDesk.last = video.currentTime; deskAt = now; drawDesktop(); }
     if (vidWanted && video.paused && !reduced) video.play().catch(() => {});
     else if (!vidWanted && !video.paused) video.pause();
-    if (composer) composer.render(); else renderer.render(scene, camera);
+    if (useComposer) composer.render(); else renderer.render(scene, camera);
+    upgradeNext(now);
     if (!sampled && nodes.length && !film.on) sampleBackground();
     placeHotspots();
   }
